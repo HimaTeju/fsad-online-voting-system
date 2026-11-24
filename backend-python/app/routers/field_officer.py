@@ -19,7 +19,7 @@ def list_applications(
     db: Session = Depends(get_db),
     current_user: User = Depends(_officer_or_admin),
 ):
-    result = svc.get_pending_applications(db, page, size)
+    result = svc.get_pending_applications(current_user, db, page, size)
     return ApiResponse.ok(result)
 
 
@@ -29,7 +29,7 @@ def get_application(
     db: Session = Depends(get_db),
     current_user: User = Depends(_officer_or_admin),
 ):
-    result = svc.get_status(application_id, db)
+    result = svc.get_status(application_id, db, current_user)
     return ApiResponse.ok(result)
 
 
@@ -41,7 +41,7 @@ def review_application(
     db: Session = Depends(get_db),
     current_user: User = Depends(_officer_or_admin),
 ):
-    result = svc.review_application(application_id, req, current_user.id, db, background_tasks)
+    result = svc.review_application(application_id, req, current_user, db, background_tasks)
     return ApiResponse.ok(result, "Application reviewed")
 
 
@@ -52,7 +52,7 @@ def verify_application(
     db: Session = Depends(get_db),
     current_user: User = Depends(_officer_or_admin),
 ):
-    result = svc.set_physical_verified(application_id, req.is_physical_verified, db)
+    result = svc.set_physical_verified(application_id, req.is_physical_verified, current_user, db)
     return ApiResponse.ok(result, "Verification status updated")
 
 

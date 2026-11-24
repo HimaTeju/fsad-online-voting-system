@@ -173,7 +173,11 @@ function ExistingVoterClaimForm({ onBack }: { onBack: () => void }) {
       toast.success(`Welcome, ${res.data.data.fullName}!`);
       navigate('/voter');
     } catch (err: any) {
+      // The OTP is only checked here, on the last step. Send the user back to the
+      // OTP step so the error shows next to the code they need to fix.
       setFieldErrors({ otp: err.response?.data?.message || 'Invalid or expired OTP' });
+      setOtp('');
+      setStep('email-otp');
     } finally {
       setLoading(false);
     }
@@ -468,7 +472,7 @@ function CandidateNominationForm({ onBack }: { onBack: () => void }) {
     <div>
       <button type="button" onClick={onBack} style={backBtnStyle}>← Back</button>
       <h2 style={formHeadingStyle}>File nomination</h2>
-      <p style={subStyle}>Complete the form below. Your account will be created after the Election Officer approves your nomination.</p>
+      <p style={subStyle}>Complete the form below. Your account will be created after the Election Officer approves your nomination. This is a separate candidate account: if you're also a voter, use a different email from your voter account.</p>
 
       <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.5rem' }}>
         <div className="field">

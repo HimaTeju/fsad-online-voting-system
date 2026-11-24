@@ -9,15 +9,17 @@ vi.mock('../context/AuthContext', () => ({
 }));
 
 import { useAuthContext } from '../context/AuthContext';
+import type { Role } from '../types/auth.types';
 
 function renderProtected(
   children: React.ReactNode,
-  { isAuthenticated = false, role = 'VOTER' }: { isAuthenticated?: boolean; role?: string } = {},
+  { isAuthenticated = false, role = 'VOTER' }: { isAuthenticated?: boolean; role?: Role } = {},
 ) {
   vi.mocked(useAuthContext).mockReturnValue({
     isAuthenticated,
     user: isAuthenticated ? { id: 1, email: 'a@b.com', fullName: 'Alice', role } : null,
     token: null,
+    isLoading: false,
     setAuth: vi.fn(),
     clearAuth: vi.fn(),
   });
@@ -50,6 +52,7 @@ describe('ProtectedRoute', () => {
       isAuthenticated: true,
       user: { id: 1, email: 'a@b.com', fullName: 'Alice', role: 'VOTER' },
       token: null,
+      isLoading: false,
       setAuth: vi.fn(),
       clearAuth: vi.fn(),
     });
@@ -73,6 +76,7 @@ describe('ProtectedRoute', () => {
       isAuthenticated: true,
       user: { id: 1, email: 'a@b.com', fullName: 'Alice', role: 'VOTER' },
       token: null,
+      isLoading: false,
       setAuth: vi.fn(),
       clearAuth: vi.fn(),
     });

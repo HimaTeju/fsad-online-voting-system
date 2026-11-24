@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
-import { electionApi } from '../../api/electionApi';
+import { voterApi } from '../../api/voterApi';
 import { applicationApi } from '../../api/applicationApi';
-import axiosClient from '../../api/axiosClient';
 import type { Election } from '../../types/election.types';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -48,23 +47,21 @@ export default function VoterDashboard() {
   const [elections, setElections] = useState<Election[]>([]);
   const [loading, setLoading] = useState(true);
   const [applicationStatus, setApplicationStatus] = useState<string | null | 'none'>('none');
-  const [hasVoterProfile, setHasVoterProfile] = useState(false);
+  const [voterProfile, setVoterProfile] = useState<{ voterIdNumber: string; constituencyName?: string } | null>(null);
+  const hasVoterProfile = !!voterProfile;
 
   useEffect(() => {
-    electionApi.list({ page: 0, size: 10 }).then((res) => {
-      const payload = res.data.data;
-      setElections(Array.isArray(payload) ? payload : (payload?.content ?? []));
-    }).finally(() => setLoading(false));
+    voterApi.elections().then((res) => setElections(res.data.data ?? [])).finally(() => setLoading(false));
 
     applicationApi.getMine().then((r) => {
       const apps = r.data.data;
-      if (apps && apps.length > 0) setApplicationStatus(apps[0].status);
+      if (apps && apps.length > 0) setApplicationStatus(apps[apps.length - 1].status);
       else setApplicationStatus('none');
     }).catch(() => setApplicationStatus('none'));
 
     // If voter already has a profile (claimed voter ID or approved application),
     // suppress the "Apply for Voter ID" banner entirely.
-    axiosClient.get('/voter/profile').then(() => setHasVoterProfile(true)).catch(() => {});
+    voterApi.profile().then((r) => setVoterProfile(r.data.data)).catch(() => {});
   }, []);
 
   const openElections = elections.filter((e) => e.status === 'VOTING_OPEN');
@@ -85,6 +82,35 @@ export default function VoterDashboard() {
         }}>Voter portal</p>
         <h1 className="h1">Welcome, {user?.fullName?.split(' ')[0]}.</h1>
       </div>
+
+      {voterProfile && (
+        <div style={{
+          marginBottom: '2rem', padding: '1.25rem 1.5rem',
+          background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--radius)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap',
+          boxShadow: 'var(--shadow-card)',
+        }}>
+          <div>
+            <p style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '0.25rem' }}>Your Voter ID</p>
+            <p style={{ fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 700, fontSize: '1.125rem', color: 'var(--ink)', letterSpacing: '0.02em' }}>{voterProfile.voterIdNumber}</p>
+            <p style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '0.8125rem', color: 'var(--muted)' }}>{voterProfile.constituencyName}</p>
+          </div>
+          <Link to="/voter/apply" className="btn btn-secondary btn-sm">View card →</Link>
+        </div>
+      )}
+      {applicationStatus === 'REJECTED' && !hasVoterProfile && (
+        <div style={{
+          marginBottom: '2rem', padding: '1.25rem 1.5rem',
+          background: 'rgba(192,57,43,0.06)', border: '1.5px solid rgba(192,57,43,0.35)', borderRadius: 'var(--radius)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap',
+        }}>
+          <div>
+            <p style={{ fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 700, fontSize: '0.9375rem', color: 'var(--ink)', marginBottom: '0.2rem' }}>Voter ID application rejected</p>
+            <p style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '0.8125rem', color: 'var(--muted)' }}>See the officer's reason and apply again with corrected details.</p>
+          </div>
+          <Link to="/voter/apply" className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>Review &amp; reapply →</Link>
+        </div>
+      )}
 
       {/* Voter ID application banner — hidden for voters who already have a profile */}
       {!hasVoterProfile && applicationStatus === 'none' && (
@@ -245,9 +271,13 @@ export default function VoterDashboard() {
                     color: 'var(--muted)',
                   }}>Closes {formatDate(e.votingEnd)}</p>
                 </div>
-                <Link to={`/vote/${e.id}`} className="btn btn-primary btn-sm">
-                  Vote now
-                </Link>
+                {e.hasVoted ? (
+                  <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--success)' }}>Voted ✓</span>
+                ) : (
+                  <Link to={`/vote/${e.id}`} className="btn btn-primary btn-sm">
+                    Vote now
+                  </Link>
+                )}
               </div>
             ))}
           </div>

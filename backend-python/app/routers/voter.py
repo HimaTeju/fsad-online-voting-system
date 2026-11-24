@@ -1,9 +1,10 @@
+from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.dependencies import get_db, get_current_user
+from app.dependencies import get_db, require_roles
 from app.models.user import User
 from app.models.voter_profile import VoterProfile
-from app.models.enums import ElectionStatus
+from app.models.enums import ElectionStatus, Role
 from app.schemas.voter import VoterProfileResponse
 from app.schemas.common import ApiResponse
 from fastapi import HTTPException
@@ -11,15 +12,18 @@ import app.services.voting_service as voting_svc
 
 router = APIRouter()
 
+_voter_only = require_roles(Role.VOTER)
 
-@router.get("/profile", response_model=ApiResponse[VoterProfileResponse])
+
+@router.get("/profile", response_model=ApiResponse[Optional[VoterProfileResponse]])
 def get_voter_profile(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
     profile = db.query(VoterProfile).filter(VoterProfile.user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(404, "Voter profile not found")
+        # Not an error: the voter just hasn't got a Voter ID yet.
+        return ApiResponse.ok(None, "No Voter ID yet")
     return ApiResponse.ok(
         VoterProfileResponse(
             id=profile.id,
@@ -29,6 +33,8 @@ def get_voter_profile(
             gender=profile.gender,
             address=profile.address,
             photo_url=profile.photo_url,
+            full_name=current_user.full_name,
+            date_of_birth=profile.date_of_birth,
         )
     )
 
@@ -36,26 +42,42 @@ def get_voter_profile(
 @router.get("/elections")
 def voter_elections(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
+    """Elections this voter can take part in: their constituency's and national
+    ones, newest first, each marked with whether they have already voted."""
+    from sqlalchemy import or_
     from app.models.election import Election
+    from app.schemas.election import VoterElectionResponse
+    from app.services.election_service import _to_response
+
     profile = db.query(VoterProfile).filter(VoterProfile.user_id == current_user.id).first()
     if not profile:
-        elections = []
-    else:
-        elections = db.query(Election).filter(
-            Election.status == ElectionStatus.VOTING_OPEN
-        ).all()
-        from app.services.election_service import _to_response
-        elections = [_to_response(e) for e in elections]
-    return ApiResponse.ok(elections)
+        return ApiResponse.ok([])
+    elections = (
+        db.query(Election)
+        .filter(
+            Election.status != ElectionStatus.DRAFT,
+            or_(Election.constituency_id == profile.constituency_id, Election.constituency_id.is_(None)),
+        )
+        .order_by(Election.voting_start.desc())
+        .all()
+    )
+    items = [
+        VoterElectionResponse(
+            **_to_response(e).model_dump(),
+            has_voted=voting_svc.has_voted(current_user.id, e.id, db),
+        )
+        for e in elections
+    ]
+    return ApiResponse.ok(items)
 
 
 @router.get("/vote-status/{election_id}")
 def vote_status(
     election_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
     voted = voting_svc.has_voted(current_user.id, election_id, db)
     return ApiResponse.ok({"voted": voted})

@@ -21,4 +21,6 @@ export interface Election {
   votingStart: string;
   votingEnd: string;
   createdAt: string;
+  /** Only on the voter's own election list. */
+  hasVoted?: boolean;
 }

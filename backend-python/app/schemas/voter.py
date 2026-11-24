@@ -66,3 +66,5 @@ class VoterProfileResponse(CamelResponse):
     gender: Optional[Gender]
     address: Optional[str]
     photo_url: Optional[str]
+    full_name: Optional[str] = None
+    date_of_birth: Optional[date] = None

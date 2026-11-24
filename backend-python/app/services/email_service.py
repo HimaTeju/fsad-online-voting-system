@@ -10,9 +10,21 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates" / "email"
 _jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
 
 
+def _print_email(to: str, subject: str, html_body: str) -> None:
+    """Without mail settings, show the email in the backend terminal instead, so
+    OTPs and candidate passwords are still available (e.g. for a demo)."""
+    import html
+    import re
+    text = re.sub(r"<(style|title)[^>]*>.*?</\1>", " ", html_body, flags=re.S | re.I)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    text = re.sub(r"[ \t]*\n\s*", "\n", re.sub(r"[ \t]+", " ", text)).strip()
+    print(f"\n{'=' * 60}\nEMAIL (not sent; MAIL_USERNAME is not set)\nTo: {to}\nSubject: {subject}\n\n{text}\n{'=' * 60}\n", flush=True)
+
+
 def _send_email(to: str, subject: str, html_body: str) -> None:
     if not settings.mail_username:
-        return  # email not configured; silently skip
+        _print_email(to, subject, html_body)
+        return
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"{settings.mail_from_name} <{settings.mail_from}>"
@@ -34,6 +46,11 @@ def _render(template_name: str, **kwargs) -> str:
 def send_password_reset_otp(to: str, full_name: str, otp: str) -> None:
     html = _render("password_reset_otp.html", full_name=full_name, otp=otp)
     _send_email(to, "Password Reset OTP", html)
+
+
+def send_account_setup_otp(to: str, full_name: str, otp: str) -> None:
+    html = _render("account_setup_otp.html", full_name=full_name, otp=otp)
+    _send_email(to, "Verify your email to set up your voter account", html)
 
 
 def send_voter_id_approved(to: str, full_name: str, voter_id: str) -> None:

@@ -15,6 +15,8 @@ interface VoterProfile {
   gender: string;
   address: string;
   photoUrl?: string;
+  fullName?: string;
+  dateOfBirth?: string;
 }
 
 type PincodeState =
@@ -54,18 +56,18 @@ export default function VoterIdApplicationPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // A voter who claimed an existing Voter ID has a profile but no application,
+      // so load the profile on its own (404 just means "no Voter ID yet").
+      try {
+        const profileRes = await axiosClient.get('/voter/profile');
+        setVoterProfile(profileRes.data.data);
+      } catch {}
       try {
         const r = await applicationApi.getMine();
         const apps = r.data.data;
         if (apps && apps.length > 0) {
-          const app = apps[0];
-          setExisting(app);
-          if (app.status === 'APPROVED') {
-            try {
-              const profileRes = await axiosClient.get('/voter/profile');
-              setVoterProfile(profileRes.data.data);
-            } catch {}
-          }
+          // Show the latest application.
+          setExisting(apps[apps.length - 1]);
         }
       } catch {}
       setLoadingExisting(false);
@@ -119,7 +121,27 @@ export default function VoterIdApplicationPage() {
 
   if (loadingExisting) return <LoadingSpinner />;
 
-  if (existing) {
+  if (voterProfile && existing?.status !== 'APPROVED') {
+    return (
+      <div className="page-wrap-sm page-content">
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 className="h1" style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>Voter ID</h1>
+        </div>
+        <VoterIdCard
+          fullName={voterProfile.fullName ?? ''}
+          voterIdNumber={voterProfile.voterIdNumber}
+          constituencyName={voterProfile.constituencyName}
+          gender={voterProfile.gender}
+          dateOfBirth={voterProfile.dateOfBirth}
+          address={voterProfile.address}
+          photoUrl={voterProfile.photoUrl}
+        />
+      </div>
+    );
+  }
+
+  // A rejected applicant gets the form again, with the officer's reason shown above it.
+  if (existing && existing.status !== 'REJECTED') {
     const isApproved = existing.status === 'APPROVED';
     return (
       <div className="page-wrap-sm page-content">
@@ -190,6 +212,21 @@ export default function VoterIdApplicationPage() {
           Fill in your details exactly as they appear on your Aadhaar card.
         </p>
       </div>
+
+      {existing?.status === 'REJECTED' && (
+        <div style={{
+          marginBottom: '1.5rem', padding: '1rem 1.25rem',
+          background: 'rgba(192,57,43,0.06)', border: '1.5px solid rgba(192,57,43,0.35)',
+          borderRadius: 'var(--radius)', fontFamily: "'Inter', system-ui, sans-serif",
+        }}>
+          <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--ink)', marginBottom: '0.25rem' }}>
+            Your previous application was rejected
+          </p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--ink-80)' }}>
+            Officer's reason: {existing.remarks || 'No reason given'}. Correct the details below and submit again.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 

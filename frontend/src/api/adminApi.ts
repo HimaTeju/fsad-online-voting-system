@@ -10,6 +10,11 @@ export const adminApi = {
     axiosClient.patch(`/admin/nominations/${id}/review`, data),
   enterManualResults: (electionId: number, data: object) =>
     axiosClient.post(`/admin/results/${electionId}/manual`, data),
+  uploadBoothCsv: (electionId: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return axiosClient.post(`/admin/results/${electionId}/booth-csv`, form);
+  },
   finalizeResults: (electionId: number) =>
     axiosClient.patch(`/admin/results/${electionId}/finalize`),
 };

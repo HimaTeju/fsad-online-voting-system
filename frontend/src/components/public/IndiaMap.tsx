@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, type SVGProps } from 'react';
 import INDIA_DATA from '../../data/india-states.json';
 import KARNATAKA_DATA from '../../data/karnataka-districts.json';
 import BANGALORE_DATA from '../../data/bangalore-taluks.json';
@@ -43,10 +43,14 @@ function ringToPath(ring: number[][], project: (lon: number, lat: number) => [nu
   }).join('') + 'Z';
 }
 
+// These layers start hidden and are shown/hidden imperatively with the `hidden`
+// attribute during drill-down. React's SVG types don't list `hidden`, so spread it.
+const START_HIDDEN = { hidden: true } as unknown as SVGProps<SVGGElement>;
+
 function featureToPath(feature: Feature, project: (lon: number, lat: number) => [number, number]): string {
   const g = feature.geometry;
-  if (g.type === 'Polygon') return (g.coordinates as number[][][]).map(r => ringToPath(r, project)).join('');
-  return (g.coordinates as number[][][][]).flatMap(poly => poly.map(r => ringToPath(r, project))).join('');
+  if (g.type === 'Polygon') return (g.coordinates as unknown as number[][][]).map(r => ringToPath(r, project)).join('');
+  return (g.coordinates as unknown as number[][][][]).flatMap(poly => poly.map(r => ringToPath(r, project))).join('');
 }
 
 const indiaProject = makeProjector(1277, -1504, 901);
@@ -99,9 +103,9 @@ export default function IndiaMap({ womenDistricts = [] }: { womenDistricts?: str
   const talukLensRef = useRef<{ el: SVGPathElement; len: number }[]>([]);
   const rafRef       = useRef<number>(0);
 
-  const indiaFeatures = useMemo(() => (INDIA_DATA as { features: Feature[] }).features, []);
-  const karnFeatures  = useMemo(() => (KARNATAKA_DATA as { features: Feature[] }).features, []);
-  const bangFeatures  = useMemo(() => (BANGALORE_DATA as { features: Feature[] }).features, []);
+  const indiaFeatures = useMemo(() => (INDIA_DATA as unknown as { features: Feature[] }).features, []);
+  const karnFeatures  = useMemo(() => (KARNATAKA_DATA as unknown as { features: Feature[] }).features, []);
+  const bangFeatures  = useMemo(() => (BANGALORE_DATA as unknown as { features: Feature[] }).features, []);
 
   const womenGeoSet = useMemo(() => {
     const s = new Set<string>();
@@ -541,7 +545,7 @@ export default function IndiaMap({ womenDistricts = [] }: { womenDistricts?: str
         />
 
         {/* Karnataka bg (animation only) */}
-        <g ref={districtsBgRef} hidden style={{ pointerEvents: 'none' }}>
+        <g ref={districtsBgRef} {...START_HIDDEN} style={{ pointerEvents: 'none' }}>
           <rect width={W} height={H} fill="#0d2137" clipPath="url(#spotlight)" />
         </g>
 
@@ -581,12 +585,12 @@ export default function IndiaMap({ womenDistricts = [] }: { womenDistricts?: str
         />
 
         {/* Bangalore bg (animation only) */}
-        <g ref={bangBgRef} hidden style={{ pointerEvents: 'none' }}>
+        <g ref={bangBgRef} {...START_HIDDEN} style={{ pointerEvents: 'none' }}>
           <rect width={W} height={H} fill="#0d2137" clipPath="url(#bang-spotlight)" />
         </g>
 
         {/* Bangalore constituency info layer */}
-        <g ref={bangLayerRef} hidden clipPath="url(#bang-spotlight)" style={{ pointerEvents: 'none' }}>
+        <g ref={bangLayerRef} {...START_HIDDEN} clipPath="url(#bang-spotlight)" style={{ pointerEvents: 'none' }}>
           <rect width={W} height={H} fill="#0a1929" />
           {/* Taluk polygons drawn with the bangProject */}
           {bangFeatures.map((feature, idx) => {

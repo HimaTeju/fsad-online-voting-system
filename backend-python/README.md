@@ -21,9 +21,37 @@ cp .env.example .env
 ## Database
 
 ```bash
-# Run Alembic migration (creates all tables + seed data)
+# Run Alembic migration (creates all tables + seed data: Karnataka constituencies,
+# pincodes and 5 demo voters whose accounts can be claimed by Voter ID)
 alembic upgrade head
 ```
+
+### Account types
+
+Voter, candidate and staff accounts are separate, and each signs in only on its own
+login tab. A person who wants to vote and also stand for election registers twice,
+with two different email addresses: a voter account (which votes) and a candidate
+account (which files nominations). Voter accounts can't file nominations, and
+candidate accounts can't vote or apply for a Voter ID.
+
+### Demo data
+
+For a demo, `python -m app.scripts.seed_demo` creates the staff accounts, a Bengaluru South
+election open for nominations and six approved candidates. Booth votes to upload for them are in
+`demo/booth_results_bengaluru_south.csv`. See [DEMO.md](../DEMO.md).
+
+### Staff accounts
+
+There is no sign-up for staff. Create the Election Officer and Booth Level Officer accounts with:
+
+```bash
+python -m app.scripts.create_staff --role ADMIN --email admin@voting.gov.in --name "Election Officer"
+python -m app.scripts.create_staff --role FIELD_OFFICER --email officer@voting.gov.in \
+    --name "Booth Level Officer Bengaluru South" --constituency "Bengaluru South"
+```
+
+You'll be prompted for a password (or pass `--password`). Booth Level Officers only see
+Voter ID applications from their own constituency.
 
 ## Run
 
@@ -34,6 +62,15 @@ uvicorn app.main:app --reload --port 8000
 - API docs: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 - Health: http://localhost:8000/health
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Tests run against an in-memory SQLite database, so no MySQL is needed.
 
 ## API Surface
 
@@ -58,5 +95,5 @@ Identical to the Spring Boot backend:
 ## Notes
 
 - WebSocket uses native WS (not STOMP/SockJS)
-- Email is disabled when `MAIL_USERNAME` is empty (safe for local dev)
+- When `MAIL_USERNAME` is empty, emails are printed to the backend terminal instead of sent
 - Election status auto-transitions run every 60 seconds via APScheduler

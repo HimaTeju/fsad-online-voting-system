@@ -23,6 +23,8 @@ export interface AuthResponse {
 export interface LoginRequest {
   email: string;
   password: string;
+  /** Login tab used. Voter, candidate and staff accounts are separate. */
+  portal?: 'VOTER' | 'CANDIDATE' | 'STAFF';
 }
 
 export interface RegisterRequest {

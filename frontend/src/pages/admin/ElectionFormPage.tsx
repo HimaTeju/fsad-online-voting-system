@@ -1,9 +1,19 @@
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
+import axiosClient from '../../api/axiosClient';
 import toast from 'react-hot-toast';
+
+/** Local date-time `hours` from now, in the format a datetime-local input expects. */
+function inHours(hours: number): string {
+  const d = new Date(Date.now() + hours * 3600_000);
+  d.setMinutes(0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 const schema = z.object({
   title: z.string().min(3),
@@ -22,8 +32,21 @@ export default function ElectionFormPage() {
   const navigate = useNavigate();
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { electionType: 'GENERAL' },
+    // Future dates so the background scheduler doesn't advance the election by
+    // itself; the Election Officer moves it through each stage from Elections.
+    defaultValues: {
+      electionType: 'GENERAL',
+      nominationStart: inHours(1),
+      nominationEnd: inHours(24),
+      votingStart: inHours(48),
+      votingEnd: inHours(72),
+    },
   });
+  const [constituencies, setConstituencies] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    axiosClient.get('/constituencies').then((r) => setConstituencies(r.data.data ?? []));
+  }, []);
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -79,9 +102,13 @@ export default function ElectionFormPage() {
               </select>
             </div>
             <div className="field">
-              <label>Constituency ID <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
-              <input {...register('constituencyId')} type="number" className="input"
-                placeholder="Leave blank for national" />
+              <label>Constituency</label>
+              <select {...register('constituencyId')} className="input">
+                <option value="">National (all constituencies)</option>
+                {[...constituencies].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
