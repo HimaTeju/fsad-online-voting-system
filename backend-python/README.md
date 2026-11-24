@@ -34,6 +34,12 @@ with two different email addresses: a voter account (which votes) and a candidat
 account (which files nominations). Voter accounts can't file nominations, and
 candidate accounts can't vote or apply for a Voter ID.
 
+### Demo data
+
+For a demo, `python -m app.scripts.seed_demo` creates the staff accounts, a Bengaluru South
+election open for nominations and six approved candidates. Booth votes to upload for them are in
+`demo/booth_results_bengaluru_south.csv`. See [DEMO.md](../DEMO.md).
+
 ### Staff accounts
 
 There is no sign-up for staff. Create the Election Officer and Booth Level Officer accounts with:
