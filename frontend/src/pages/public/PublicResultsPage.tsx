@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { resultApi } from '../../api/resultApi';
 import { electionApi } from '../../api/electionApi';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -27,7 +28,8 @@ function CustomTooltip({ active, payload }: any) {
 
 export default function PublicResultsPage() {
   const [elections, setElections] = useState<Election[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [params] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<number | null>(Number(params.get('election')) || null);
   const [result, setResult] = useState<ElectionResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -66,7 +68,7 @@ export default function PublicResultsPage() {
 
       <div className="field" style={{ maxWidth: 400, marginBottom: '2.5rem' }}>
         <label>Select election</label>
-        <select className="input" onChange={(e) => setSelectedId(Number(e.target.value))}>
+        <select className="input" value={selectedId ?? ''} onChange={(e) => setSelectedId(Number(e.target.value) || null)}>
           <option value="">Choose an election…</option>
           {elections.map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
         </select>

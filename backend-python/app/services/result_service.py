@@ -206,3 +206,105 @@ def get_results(election_id: int, db: Session) -> ElectionResultResponse:
         finalized=finalized,
         results=results,
     )
+
+
+# ── Booth results from CSV ──────────────────────────────────────────────────
+#
+# Not every vote is cast online: booth (paper/EVM) counts are uploaded by the
+# Election Officer as a CSV and added to the online votes. Expected columns
+# (header names are case-insensitive, extra columns are ignored):
+#
+#     booth,candidate_id,candidate_name,votes
+#     Booth 1,1,Lakshmi Rao,120
+#     Booth 1,2,Arjun Patil,95
+#
+# A row needs `booth`, `votes` and either `candidate_id` or `candidate_name`.
+# Votes are summed per candidate across all booths, and the totals replace any
+# booth votes entered before. Candidates missing from the file get 0.
+
+def import_booth_csv(election_id: int, content: bytes, admin_id: int, db: Session) -> dict:
+    import csv
+    import io
+    from app.schemas.result import BoothResultEntry
+
+    try:
+        text = content.decode("utf-8-sig")  # tolerate the BOM Excel adds
+    except UnicodeDecodeError:
+        raise HTTPException(400, "The file must be a UTF-8 CSV")
+
+    reader = csv.DictReader(io.StringIO(text))
+    headers = {(h or "").strip().lower(): h for h in (reader.fieldnames or [])}
+    missing = {"booth", "votes"} - headers.keys()
+    if missing or not ({"candidate_id", "candidate_name"} & headers.keys()):
+        raise HTTPException(
+            400,
+            "CSV header must include booth, votes and candidate_id or candidate_name "
+            f"(found: {', '.join(reader.fieldnames or []) or 'nothing'})",
+        )
+
+    candidates = db.query(Candidate).filter(
+        Candidate.election_id == election_id,
+        Candidate.nomination_status == NominationStatus.APPROVED,
+    ).all()
+    by_id = {c.id: c for c in candidates}
+    by_name = {c.user.full_name.strip().lower(): c for c in candidates if c.user}
+
+    def cell(row, name):
+        key = headers.get(name)
+        return (row.get(key) or "").strip() if key else ""
+
+    totals = {c.id: 0 for c in candidates}
+    booths, seen, errors, rows = set(), set(), [], 0
+    for line_no, row in enumerate(reader, start=2):
+        if not any((v or "").strip() for v in row.values()):
+            continue  # skip blank lines
+        rows += 1
+        booth, cid, cname, votes = (cell(row, "booth"), cell(row, "candidate_id"),
+                                    cell(row, "candidate_name"), cell(row, "votes"))
+        if not booth:
+            errors.append(f"Line {line_no}: booth is empty")
+            continue
+        candidate = None
+        if cid:
+            candidate = by_id.get(int(cid)) if cid.isdigit() else None
+            if not candidate:
+                errors.append(f"Line {line_no}: candidate_id {cid} is not a candidate in this election")
+                continue
+        elif cname:
+            candidate = by_name.get(cname.lower())
+            if not candidate:
+                errors.append(f"Line {line_no}: no candidate named '{cname}' in this election")
+                continue
+        else:
+            errors.append(f"Line {line_no}: candidate_id or candidate_name is required")
+            continue
+        if not votes.isdigit():
+            errors.append(f"Line {line_no}: votes must be a whole number 0 or more (got '{votes}')")
+            continue
+        if (booth.lower(), candidate.id) in seen:
+            errors.append(f"Line {line_no}: {booth} has more than one row for {candidate.user.full_name}")
+            continue
+        seen.add((booth.lower(), candidate.id))
+        booths.add(booth.lower())
+        totals[candidate.id] += int(votes)
+
+    if errors:
+        shown = errors[:10] + ([f"…and {len(errors) - 10} more"] if len(errors) > 10 else [])
+        raise HTTPException(400, "The CSV has problems: " + "; ".join(shown))
+    if rows == 0:
+        raise HTTPException(400, "The CSV has no data rows")
+
+    results = enter_manual_results(
+        election_id,
+        ManualBoothResultRequest(results=[
+            BoothResultEntry(candidate_id=cid, manual_booth_votes=v) for cid, v in totals.items()
+        ]),
+        admin_id,
+        db,
+    )
+    return {
+        "booths": len(booths),
+        "rows": rows,
+        "boothVotes": sum(totals.values()),
+        "results": results,
+    }

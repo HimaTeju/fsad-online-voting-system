@@ -140,7 +140,8 @@ export default function VoterIdApplicationPage() {
     );
   }
 
-  if (existing) {
+  // A rejected applicant gets the form again, with the officer's reason shown above it.
+  if (existing && existing.status !== 'REJECTED') {
     const isApproved = existing.status === 'APPROVED';
     return (
       <div className="page-wrap-sm page-content">
@@ -211,6 +212,21 @@ export default function VoterIdApplicationPage() {
           Fill in your details exactly as they appear on your Aadhaar card.
         </p>
       </div>
+
+      {existing?.status === 'REJECTED' && (
+        <div style={{
+          marginBottom: '1.5rem', padding: '1rem 1.25rem',
+          background: 'rgba(192,57,43,0.06)', border: '1.5px solid rgba(192,57,43,0.35)',
+          borderRadius: 'var(--radius)', fontFamily: "'Inter', system-ui, sans-serif",
+        }}>
+          <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--ink)', marginBottom: '0.25rem' }}>
+            Your previous application was rejected
+          </p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--ink-80)' }}>
+            Officer's reason: {existing.remarks || 'No reason given'}. Correct the details below and submit again.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 

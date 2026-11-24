@@ -40,6 +40,10 @@ def create_election(req: CreateElectionRequest, admin_id: int, db: Session) -> E
         raise HTTPException(400, "nomination_end must be before voting_start")
     if req.voting_start >= req.voting_end:
         raise HTTPException(400, "voting_start must be before voting_end")
+    voting_end = req.voting_end if req.voting_end.tzinfo else req.voting_end.replace(tzinfo=timezone.utc)
+    if voting_end <= datetime.now(timezone.utc):
+        # The scheduler would immediately push a past election through every stage.
+        raise HTTPException(400, "Voting end must be in the future")
 
     vote_salt = secrets.token_hex(32)
     election = Election(

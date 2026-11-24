@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { electionApi } from '../../api/electionApi';
+import { voterApi } from '../../api/voterApi';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { formatDate } from '../../utils/dateUtils';
@@ -11,7 +11,7 @@ export default function ElectionListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    electionApi.list().then((r) => setElections(r.data.data?.content ?? r.data.data ?? [])).finally(() => setLoading(false));
+    voterApi.elections().then((r) => setElections(r.data.data ?? [])).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <LoadingSpinner />;
@@ -33,7 +33,7 @@ export default function ElectionListPage() {
           background: 'var(--paper)', border: '1px solid var(--rule)',
           borderRadius: 'var(--radius)', padding: '3rem', textAlign: 'center',
         }}>
-          <p style={{ fontFamily: "'Inter', system-ui, sans-serif", color: 'var(--muted)' }}>No elections found.</p>
+          <p style={{ fontFamily: "'Inter', system-ui, sans-serif", color: 'var(--muted)' }}>No elections for your constituency yet. Elections appear here once you have a Voter ID.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -64,11 +64,11 @@ export default function ElectionListPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
                 <StatusBadge status={e.status} />
-                {e.status === 'VOTING_OPEN' && (
-                  <Link to={`/vote/${e.id}`} className="btn btn-primary btn-sm">Vote now</Link>
-                )}
+                {e.status === 'VOTING_OPEN' && (e.hasVoted
+                  ? <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--success)' }}>Voted ✓</span>
+                  : <Link to={`/vote/${e.id}`} className="btn btn-primary btn-sm">Vote now</Link>)}
                 {e.status === 'RESULTS_DECLARED' && (
-                  <Link to="/results" className="btn btn-secondary btn-sm">Results</Link>
+                  <Link to={`/results?election=${e.id}`} className="btn btn-secondary btn-sm">Results</Link>
                 )}
               </div>
             </div>

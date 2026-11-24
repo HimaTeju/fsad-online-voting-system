@@ -131,6 +131,17 @@ def review_application(
 
     db.commit()
     db.refresh(app)
+
+    from app.models.enums import NotificationType
+    from app.services.notification_service import create_notification
+    if req.approved:
+        title, body = "Voter ID approved", f"Your Voter ID is {voter_id}. You can now vote in your constituency's elections."
+    else:
+        title, body = "Voter ID application rejected", f"Reason: {req.remarks}. You can correct your details and apply again."
+    create_notification(
+        db, recipient_id=app.user_id, sender_id=officer.id,
+        type_=NotificationType.APPLICATION_STATUS, title=title, body=body,
+    )
     return _to_response(app)
 
 

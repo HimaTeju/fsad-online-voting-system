@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, BackgroundTasks, File, Query, UploadFile
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, require_roles
 from app.models.user import User
@@ -90,6 +90,22 @@ def enter_manual_results(
 ):
     result = result_svc.enter_manual_results(election_id, req, current_user.id, db)
     return ApiResponse.ok(result)
+
+
+@router.post("/results/{election_id}/booth-csv")
+def upload_booth_csv(
+    election_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_admin),
+):
+    """Upload booth vote counts as CSV; they are summed per candidate and added to online votes."""
+    content = file.file.read()
+    if len(content) > 2 * 1024 * 1024:
+        from fastapi import HTTPException
+        raise HTTPException(400, "CSV file is too large (max 2 MB)")
+    result = result_svc.import_booth_csv(election_id, content, current_user.id, db)
+    return ApiResponse.ok(result, "Booth results uploaded")
 
 
 @router.patch("/results/{election_id}/finalize")

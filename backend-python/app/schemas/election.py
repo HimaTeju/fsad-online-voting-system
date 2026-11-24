@@ -33,3 +33,9 @@ class ElectionResponse(CamelResponse):
     voting_start: Optional[datetime]
     voting_end: Optional[datetime]
     created_at: Optional[datetime]
+
+
+class VoterElectionResponse(ElectionResponse):
+    """An election as a voter sees it, with whether they've already voted in it."""
+    has_voted: bool = False
+

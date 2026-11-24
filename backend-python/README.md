@@ -89,5 +89,5 @@ Identical to the Spring Boot backend:
 ## Notes
 
 - WebSocket uses native WS (not STOMP/SockJS)
-- Email is disabled when `MAIL_USERNAME` is empty (safe for local dev)
+- When `MAIL_USERNAME` is empty, emails are printed to the backend terminal instead of sent
 - Election status auto-transitions run every 60 seconds via APScheduler
