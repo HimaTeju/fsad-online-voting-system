@@ -1,0 +1,62 @@
+# Online Voting System — FastAPI Backend
+
+Python/FastAPI backend for the Online Voting System (India). Features: auth, elections, voting, candidates, voter ID applications, results, forum, chat WebSocket, notifications, scheduler, email.
+
+## Setup
+
+```bash
+cd backend-python
+python -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+## Configuration
+
+```bash
+cp .env.example .env
+# Edit .env — set DB_PASSWORD, JWT_SECRET, MAIL_* credentials
+```
+
+## Database
+
+```bash
+# Run Alembic migration (creates all tables + seed data)
+alembic upgrade head
+```
+
+## Run
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+- API docs: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- Health: http://localhost:8000/health
+
+## API Surface
+
+Identical to the Spring Boot backend:
+
+| Group | Endpoints |
+|---|---|
+| Auth | `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `/forgot-password`, `/reset-password`, `GET /api/auth/me`, `POST /voter-id/request-otp`, `/voter-id/verify`, `/candidate/register` |
+| Elections | `GET /api/elections`, `/elections/{id}`, `/elections/{id}/candidates`, `/elections/{id}/live-stats` |
+| Voting | `POST /api/elections/{id}/vote`, `GET /api/elections/{id}/vote-status` |
+| Candidates | `GET /api/candidates/{id}`, `POST /api/candidates/nominate`, `PUT /api/candidates/profile`, `GET /api/candidates/mine` |
+| Applications | `POST /api/applications`, `GET /api/applications/{id}/status`, `GET /api/applications/mine` |
+| Voter | `GET /api/voter/profile`, `/voter/elections`, `/voter/vote-status/{id}` |
+| Field Officer | `GET /api/field-officer/applications`, `GET /api/field-officer/applications/{id}`, `PATCH /api/field-officer/applications/{id}/review` |
+| Admin | `POST /api/admin/elections`, `GET /api/admin/elections`, `PATCH /api/admin/elections/{id}/status`, `GET /api/admin/nominations`, `PATCH /api/admin/nominations/{id}/review`, `POST /api/admin/results/{id}/manual`, `PATCH /api/admin/results/{id}/finalize` |
+| Results | `GET /api/results/{election_id}` |
+| Forum | `POST /api/forum/threads`, `GET /api/forum/threads/constituency/{id}`, `/election/{id}`, `POST /threads/{id}/posts`, `GET /threads/{id}/posts`, `PUT /posts/{id}`, `DELETE /posts/{id}`, `GET /chat/{room}/history` |
+| Notifications | `GET /api/notifications`, `/unread-count`, `PATCH /{id}/read`, `/read-all` |
+| Constituencies | `GET /api/constituencies`, `/karnataka`, `/by-pincode/{pin}`, `/stats` |
+| WebSocket | `ws://.../ws/election/{id}/stats`, `ws://.../ws/chat/{constituencyId}?token=...`, `ws://.../ws/notifications?token=...` |
+
+## Notes
+
+- WebSocket uses native WS (not STOMP/SockJS)
+- Email is disabled when `MAIL_USERNAME` is empty (safe for local dev)
+- Election status auto-transitions run every 60 seconds via APScheduler
