@@ -21,8 +21,12 @@ def submit_application(
 
 
 @router.get("/{application_id}/status")
-def get_status(application_id: int, db: Session = Depends(get_db)):
-    result = svc.get_status(application_id, db)
+def get_status(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = svc.get_status(application_id, db, current_user)
     return ApiResponse.ok(result)
 
 

@@ -36,12 +36,21 @@ def _to_response(c: Candidate) -> CandidateResponse:
     )
 
 
-def nominate(req: CandidateNominationRequest, user_id: int, db: Session) -> CandidateResponse:
-    election = db.query(Election).filter(Election.id == req.election_id).first()
+def check_nomination_target(election_id: int, constituency_id: int, db: Session) -> Election:
+    """The election must be taking nominations, and a constituency election only
+    accepts candidates for its own constituency."""
+    election = db.query(Election).filter(Election.id == election_id).first()
     if not election:
         raise HTTPException(404, "Election not found")
     if election.status != ElectionStatus.NOMINATION_OPEN:
         raise HTTPException(400, "Election is not open for nominations")
+    if election.constituency_id and constituency_id != election.constituency_id:
+        raise HTTPException(400, "This election is only for its own constituency")
+    return election
+
+
+def nominate(req: CandidateNominationRequest, user_id: int, db: Session) -> CandidateResponse:
+    check_nomination_target(req.election_id, req.constituency_id, db)
     if db.query(Candidate).filter(
         Candidate.user_id == user_id, Candidate.election_id == req.election_id
     ).first():
@@ -74,6 +83,8 @@ def review_nomination(
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
         raise HTTPException(404, "Candidate not found")
+    if candidate.nomination_status != NominationStatus.SUBMITTED:
+        raise HTTPException(409, f"Nomination has already been {candidate.nomination_status.value.lower()}")
 
     if req.approved:
         candidate.nomination_status = NominationStatus.APPROVED

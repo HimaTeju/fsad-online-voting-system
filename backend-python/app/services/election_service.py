@@ -67,6 +67,8 @@ def update_status(
     election = db.query(Election).filter(Election.id == election_id).first()
     if not election:
         raise HTTPException(404, "Election not found")
+    if req.status == ElectionStatus.RESULTS_DECLARED:
+        raise HTTPException(400, "Finalise the results from the results page to declare them")
     allowed = ALLOWED_TRANSITIONS.get(election.status, [])
     if req.status not in allowed:
         raise HTTPException(400, f"Cannot transition from {election.status} to {req.status}")

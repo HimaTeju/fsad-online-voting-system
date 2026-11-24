@@ -5,9 +5,23 @@ from sqlalchemy.orm import Session
 from app.models.voter_id_application import VoterIdApplication
 from app.models.voter_profile import VoterProfile
 from app.models.constituency_pincode import ConstituencyPincode
-from app.models.enums import ApplicationStatus
+from app.models.enums import ApplicationStatus, Role
+from app.models.user import User
 from app.schemas.voter import VoterIdApplicationRequest, ApplicationReviewRequest, ApplicationVerifyRequest, ApplicationResponse
 from app.utils.voter_id import generate_voter_id
+
+
+_OPEN_STATUSES = [ApplicationStatus.PENDING, ApplicationStatus.UNDER_REVIEW]
+
+
+def _get_for_officer(application_id: int, officer: User, db: Session) -> VoterIdApplication:
+    """Load an application, limiting Booth Level Officers to their own constituency."""
+    app = db.query(VoterIdApplication).filter(VoterIdApplication.id == application_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+    if officer.role == Role.FIELD_OFFICER and app.constituency_id != officer.constituency_id:
+        raise HTTPException(403, "This application belongs to another constituency")
+    return app
 
 
 def _to_response(app: VoterIdApplication) -> ApplicationResponse:
@@ -31,6 +45,13 @@ def _to_response(app: VoterIdApplication) -> ApplicationResponse:
 def submit_application(
     req: VoterIdApplicationRequest, user_id: int, db: Session
 ) -> ApplicationResponse:
+    if db.query(VoterProfile).filter(VoterProfile.user_id == user_id).first():
+        raise HTTPException(409, "You already have a Voter ID")
+    if db.query(VoterIdApplication).filter(
+        VoterIdApplication.user_id == user_id,
+        VoterIdApplication.status.in_(_OPEN_STATUSES),
+    ).first():
+        raise HTTPException(409, "You already have an application under review")
     if db.query(VoterIdApplication).filter(
         VoterIdApplication.national_id == req.national_id
     ).first():
@@ -64,15 +85,22 @@ def submit_application(
 def review_application(
     application_id: int,
     req: ApplicationReviewRequest,
-    officer_id: int,
+    officer: User,
     db: Session,
     background_tasks,
 ) -> ApplicationResponse:
-    app = db.query(VoterIdApplication).filter(VoterIdApplication.id == application_id).first()
-    if not app:
-        raise HTTPException(404, "Application not found")
+    app = _get_for_officer(application_id, officer, db)
+    if app.status not in _OPEN_STATUSES:
+        raise HTTPException(409, f"Application has already been {app.status.value.lower()}")
+    if req.approved:
+        if not app.is_physical_verified:
+            raise HTTPException(400, "Physical verification is required before approving")
+        if db.query(VoterProfile).filter(VoterProfile.user_id == app.user_id).first():
+            raise HTTPException(409, "This applicant already has a Voter ID")
+    elif not (req.remarks or "").strip():
+        raise HTTPException(400, "A reason is required when rejecting an application")
 
-    app.reviewed_by = officer_id
+    app.reviewed_by = officer.id
     app.reviewed_at = datetime.now(timezone.utc)
     app.remarks = req.remarks
 
@@ -106,10 +134,15 @@ def review_application(
     return _to_response(app)
 
 
-def get_status(application_id: int, db: Session) -> dict:
+def get_status(application_id: int, db: Session, user: User | None = None) -> dict:
     app = db.query(VoterIdApplication).filter(VoterIdApplication.id == application_id).first()
     if not app:
         raise HTTPException(404, "Application not found")
+    if user is not None:
+        if user.role == Role.FIELD_OFFICER:
+            _get_for_officer(application_id, user, db)
+        elif user.role != Role.ADMIN and app.user_id != user.id:
+            raise HTTPException(404, "Application not found")
     return {"id": app.id, "status": app.status.value, "remarks": app.remarks}
 
 
@@ -118,10 +151,13 @@ def get_my_applications(user_id: int, db: Session) -> list:
     return [_to_response(a) for a in apps]
 
 
-def get_pending_applications(db: Session, page: int = 0, size: int = 20) -> list:
+def get_pending_applications(officer: User, db: Session, page: int = 0, size: int = 20) -> list:
+    query = db.query(VoterIdApplication).filter(VoterIdApplication.status.in_(_OPEN_STATUSES))
+    if officer.role == Role.FIELD_OFFICER:
+        query = query.filter(VoterIdApplication.constituency_id == officer.constituency_id)
     apps = (
-        db.query(VoterIdApplication)
-        .filter(VoterIdApplication.status.in_([ApplicationStatus.PENDING, ApplicationStatus.UNDER_REVIEW]))
+        query
+        .order_by(VoterIdApplication.id)
         .offset(page * size)
         .limit(size)
         .all()
@@ -129,10 +165,12 @@ def get_pending_applications(db: Session, page: int = 0, size: int = 20) -> list
     return [_to_response(a) for a in apps]
 
 
-def set_physical_verified(application_id: int, verified: bool, db: Session) -> ApplicationResponse:
-    app = db.query(VoterIdApplication).filter(VoterIdApplication.id == application_id).first()
-    if not app:
-        raise HTTPException(404, "Application not found")
+def set_physical_verified(
+    application_id: int, verified: bool, officer: User, db: Session
+) -> ApplicationResponse:
+    app = _get_for_officer(application_id, officer, db)
+    if app.status not in _OPEN_STATUSES:
+        raise HTTPException(409, f"Application has already been {app.status.value.lower()}")
     app.is_physical_verified = verified
     db.commit()
     db.refresh(app)

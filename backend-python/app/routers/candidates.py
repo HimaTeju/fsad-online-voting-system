@@ -9,9 +9,12 @@ import app.services.candidate_service as svc
 router = APIRouter()
 
 
-@router.get("/candidates/{candidate_id}")
-def get_candidate(candidate_id: int, db: Session = Depends(get_db)):
-    result = svc.get_candidate(candidate_id, db)
+@router.get("/candidates/mine")
+def my_nominations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = svc.get_my_nominations(current_user.id, db)
     return ApiResponse.ok(result)
 
 
@@ -35,10 +38,8 @@ def update_profile(
     return ApiResponse.ok(result)
 
 
-@router.get("/candidates/mine")
-def my_nominations(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    result = svc.get_my_nominations(current_user.id, db)
+# Declared last so literal paths like /candidates/mine match before this one.
+@router.get("/candidates/{candidate_id}")
+def get_candidate(candidate_id: int, db: Session = Depends(get_db)):
+    result = svc.get_candidate(candidate_id, db)
     return ApiResponse.ok(result)

@@ -22,6 +22,20 @@ def enter_manual_results(
         raise HTTPException(404, "Election not found")
     if election.status not in (ElectionStatus.VOTING_CLOSED, ElectionStatus.RESULTS_DECLARED):
         raise HTTPException(400, "Election voting must be closed before entering results")
+    if _is_finalized(election_id, db):
+        raise HTTPException(409, "Results are finalised and can no longer be edited")
+
+    valid_ids = {
+        cid for (cid,) in db.query(Candidate.id).filter(
+            Candidate.election_id == election_id,
+            Candidate.nomination_status == NominationStatus.APPROVED,
+        )
+    }
+    for entry in req.results:
+        if entry.candidate_id not in valid_ids:
+            raise HTTPException(400, f"Candidate {entry.candidate_id} is not standing in this election")
+        if entry.manual_booth_votes < 0:
+            raise HTTPException(400, "Booth vote counts cannot be negative")
 
     online_counts = dict(
         db.query(Vote.candidate_id, func.count(Vote.id))
@@ -59,6 +73,38 @@ def finalize_results(election_id: int, admin_id: int, db: Session, background_ta
     if not election:
         raise HTTPException(404, "Election not found")
 
+    if _is_finalized(election_id, db):
+        raise HTTPException(409, "Results are already finalised")
+    if election.status != ElectionStatus.VOTING_CLOSED:
+        raise HTTPException(400, "Voting must be closed before results can be finalised")
+
+    # Make sure every approved candidate has a result row, so online-only
+    # elections (no booth counts entered) are finalised too.
+    existing = {
+        cid for (cid,) in db.query(ElectionResult.candidate_id).filter(
+            ElectionResult.election_id == election_id
+        )
+    }
+    online_counts = dict(
+        db.query(Vote.candidate_id, func.count(Vote.id))
+        .filter(Vote.election_id == election_id)
+        .group_by(Vote.candidate_id)
+        .all()
+    )
+    for c in db.query(Candidate).filter(
+        Candidate.election_id == election_id,
+        Candidate.nomination_status == NominationStatus.APPROVED,
+    ):
+        if c.id not in existing:
+            db.add(ElectionResult(
+                election_id=election_id,
+                candidate_id=c.id,
+                constituency_id=c.constituency_id,
+                online_votes=online_counts.get(c.id, 0),
+                manual_booth_votes=0,
+                entered_by=admin_id,
+            ))
+    db.flush()
     db.query(ElectionResult).filter(ElectionResult.election_id == election_id).update(
         {"finalized": True}
     )
@@ -67,7 +113,44 @@ def finalize_results(election_id: int, admin_id: int, db: Session, background_ta
 
     from app.services.websocket_broadcast import broadcast_vote_stats
     background_tasks.add_task(broadcast_vote_stats, election_id, db)
+    background_tasks.add_task(_announce_results, election_id)
     return get_results(election_id, db)
+
+
+def _is_finalized(election_id: int, db: Session) -> bool:
+    return db.query(ElectionResult.id).filter(
+        ElectionResult.election_id == election_id, ElectionResult.finalized == True  # noqa: E712
+    ).first() is not None
+
+
+def _announce_results(election_id: int) -> None:
+    """Email the candidates and notify eligible voters in-app. Runs as a background task."""
+    from app.database import SessionLocal
+    from app.models.enums import NotificationType
+    from app.models.voter_profile import VoterProfile
+    from app.services.email_service import send_result_declared
+    from app.services.notification_service import create_notification
+
+    db = SessionLocal()
+    try:
+        election = db.query(Election).filter(Election.id == election_id).first()
+        if not election:
+            return
+        title = f"Results declared: {election.title}"
+        for c in db.query(Candidate).filter(Candidate.election_id == election_id):
+            if c.user:
+                send_result_declared(c.user.email, c.user.full_name, election.title)
+        voters = db.query(VoterProfile)
+        if election.constituency_id:
+            voters = voters.filter(VoterProfile.constituency_id == election.constituency_id)
+        for vp in voters:
+            create_notification(
+                db, recipient_id=vp.user_id, sender_id=None,
+                type_=NotificationType.RESULT_DECLARED, title=title,
+                body="The final results are now published.",
+            )
+    finally:
+        db.close()
 
 
 def get_results(election_id: int, db: Session) -> ElectionResultResponse:
@@ -87,7 +170,7 @@ def get_results(election_id: int, db: Session) -> ElectionResultResponse:
         results = [
             CandidateResult(
                 candidate_id=r.candidate_id,
-                name=r.candidate.user.full_name if r.candidate and r.candidate.user else None,
+                candidate_name=r.candidate.user.full_name if r.candidate and r.candidate.user else None,
                 party_name=r.candidate.party_name if r.candidate else None,
                 online_votes=r.online_votes,
                 manual_booth_votes=r.manual_booth_votes,
@@ -107,7 +190,7 @@ def get_results(election_id: int, db: Session) -> ElectionResultResponse:
         results = [
             CandidateResult(
                 candidate_id=c.id,
-                name=c.user.full_name if c.user else None,
+                candidate_name=c.user.full_name if c.user else None,
                 party_name=c.party_name,
                 online_votes=c.online_vote_count,
                 manual_booth_votes=0,

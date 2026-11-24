@@ -56,7 +56,7 @@ def build_stats(election_id: int, db: Session) -> VoteStatsResponse:
     candidate_stats = [
         CandidateStat(
             candidate_id=c.id,
-            name=c.user.full_name if c.user else None,
+            candidate_name=c.user.full_name if c.user else None,
             party_name=c.party_name,
             vote_count=vote_counts.get(c.id, 0),
         )

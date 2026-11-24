@@ -25,8 +25,12 @@ def cast_vote(
         raise HTTPException(400, "Voter profile not found. Please apply for voter ID first.")
 
     candidate = db.query(Candidate).filter(Candidate.id == req.candidate_id).first()
-    if not candidate or candidate.nomination_status != NominationStatus.APPROVED:
-        raise HTTPException(400, "Invalid or unapproved candidate")
+    if (
+        not candidate
+        or candidate.election_id != election.id
+        or candidate.nomination_status != NominationStatus.APPROVED
+    ):
+        raise HTTPException(400, "Invalid or unapproved candidate for this election")
 
     # Constituency check for non-national elections
     if election.constituency_id and profile.constituency_id != election.constituency_id:

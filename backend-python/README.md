@@ -21,9 +21,23 @@ cp .env.example .env
 ## Database
 
 ```bash
-# Run Alembic migration (creates all tables + seed data)
+# Run Alembic migration (creates all tables + seed data: Karnataka constituencies,
+# pincodes and 5 demo voters whose accounts can be claimed by Voter ID)
 alembic upgrade head
 ```
+
+### Staff accounts
+
+There is no sign-up for staff. Create the Election Officer and Booth Level Officer accounts with:
+
+```bash
+python -m app.scripts.create_staff --role ADMIN --email admin@voting.gov.in --name "Election Officer"
+python -m app.scripts.create_staff --role FIELD_OFFICER --email officer@voting.gov.in \
+    --name "Booth Level Officer Bengaluru South" --constituency "Bengaluru South"
+```
+
+You'll be prompted for a password (or pass `--password`). Booth Level Officers only see
+Voter ID applications from their own constituency.
 
 ## Run
 
@@ -34,6 +48,15 @@ uvicorn app.main:app --reload --port 8000
 - API docs: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 - Health: http://localhost:8000/health
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Tests run against an in-memory SQLite database, so no MySQL is needed.
 
 ## API Surface
 

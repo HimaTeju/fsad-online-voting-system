@@ -18,7 +18,7 @@ class ManualBoothResultRequest(CamelModel):
 
 class CandidateResult(CamelResponse):
     candidate_id: int
-    name: Optional[str]
+    candidate_name: Optional[str]
     party_name: Optional[str]
     online_votes: int
     manual_booth_votes: int
@@ -35,7 +35,7 @@ class ElectionResultResponse(CamelResponse):
 
 class CandidateStat(CamelResponse):
     candidate_id: int
-    name: Optional[str]
+    candidate_name: Optional[str]
     party_name: Optional[str]
     vote_count: int
 

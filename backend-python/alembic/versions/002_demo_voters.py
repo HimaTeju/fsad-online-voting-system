@@ -1,13 +1,13 @@
 """Demo voter profiles — 5 pre-existing Karnataka voters for account-claim flow testing
 
 Revision ID: 002
-Revises: 001
+Revises: 001b
 Create Date: 2024-01-02 00:00:00
 """
 from alembic import op
 
 revision = "002"
-down_revision = "001"
+down_revision = "001b"
 branch_labels = None
 depends_on = None
 
@@ -28,7 +28,7 @@ def upgrade() -> None:
     """)
 
     # Insert voter_profiles linked to the users above.
-    # constituency_id values must match rows already seeded by V5 migration:
+    # constituency_id values must match rows seeded by migration 001b:
     #   Bengaluru Central, Bengaluru South, Mysuru, Bengaluru North
     op.execute("""
         INSERT INTO voter_profiles (user_id, voter_id_number, constituency_id, gender, date_of_birth, address, national_id)

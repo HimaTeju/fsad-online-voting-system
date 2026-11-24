@@ -173,6 +173,8 @@ def verify_voter_id_otp(
 
 
 def register_candidate(req, db: Session, background_tasks) -> dict:
+    from app.services.candidate_service import check_nomination_target
+    check_nomination_target(req.election_id, req.constituency_id, db)
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     import secrets as sec
@@ -262,8 +264,8 @@ def claim_send_otp(voter_id_number: str, email: str, db: Session, background_tas
 
     _pending_claims[user.id] = email
 
-    from app.services.email_service import send_password_reset_otp
-    background_tasks.add_task(send_password_reset_otp, email, user.full_name, otp)
+    from app.services.email_service import send_account_setup_otp
+    background_tasks.add_task(send_account_setup_otp, email, user.full_name, otp)
 
 
 def claim_verify(
@@ -304,198 +306,3 @@ def claim_verify(
             return _make_auth_response(user, db)
 
     raise HTTPException(status_code=400, detail="Invalid or expired OTP. Please try again.")
-
-
-
-REFRESH_COOKIE = "refreshToken"
-
-
-def _make_auth_response(user: User, db: Session) -> AuthResponse:
-    access_token = create_access_token(user.id, user.email, user.role.value)
-    return AuthResponse(
-        access_token=access_token,
-        user_id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-    )
-
-
-def _set_refresh_cookie(response: Response, user: User) -> None:
-    refresh_token = create_refresh_token(user.id)
-    response.set_cookie(
-        key=REFRESH_COOKIE,
-        value=refresh_token,
-        httponly=True,
-        max_age=settings.jwt_refresh_token_expire_days * 86400,
-        path="/api/auth/refresh",
-        samesite="lax",
-    )
-
-
-def register(req: RegisterRequest, db: Session) -> AuthResponse:
-    if db.query(User).filter(User.email == req.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user = User(
-        email=req.email,
-        password_hash=hash_password(req.password),
-        full_name=req.full_name,
-        phone=req.phone,
-        role=Role.VOTER,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return _make_auth_response(user, db)
-
-
-def login(req: LoginRequest, response: Response, db: Session) -> AuthResponse:
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user or not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    if not user.is_active:
-        raise HTTPException(status_code=401, detail="Account is deactivated")
-    _set_refresh_cookie(response, user)
-    return _make_auth_response(user, db)
-
-
-def refresh_token(refresh_tok: str, db: Session) -> dict:
-    try:
-        payload = decode_token(refresh_tok)
-        if payload.get("type") != "refresh":
-            raise ValueError("Not a refresh token")
-        user_id = int(payload["sub"])
-    except (ValueError, KeyError):
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    access_token = create_access_token(user.id, user.email, user.role.value)
-    return {"access_token": access_token, "token_type": "Bearer"}
-
-
-def logout(response: Response) -> None:
-    response.delete_cookie(key=REFRESH_COOKIE, path="/api/auth/refresh")
-
-
-def forgot_password(email: str, db: Session, background_tasks) -> None:
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        return  # prevent enumeration
-    otp = generate_otp()
-    otp_hash = hash_password(otp)
-    expires = datetime.now(timezone.utc) + timedelta(minutes=15)
-    token = PasswordResetToken(user_id=user.id, otp_hash=otp_hash, expires_at=expires)
-    db.add(token)
-    db.commit()
-    from app.services.email_service import send_password_reset_otp
-    background_tasks.add_task(send_password_reset_otp, user.email, user.full_name, otp)
-
-
-def reset_password(email: str, otp: str, new_password: str, db: Session) -> None:
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid request")
-    now = datetime.now(timezone.utc)
-    tokens = (
-        db.query(PasswordResetToken)
-        .filter(
-            PasswordResetToken.user_id == user.id,
-            PasswordResetToken.used == False,
-            PasswordResetToken.expires_at > now,
-        )
-        .order_by(PasswordResetToken.expires_at.desc())
-        .all()
-    )
-    for t in tokens:
-        if verify_password(otp, t.otp_hash):
-            t.used = True
-            user.password_hash = hash_password(new_password)
-            db.commit()
-            return
-    raise HTTPException(status_code=400, detail="Invalid or expired OTP")
-
-
-def request_voter_id_otp(voter_id_number: str, db: Session, background_tasks) -> None:
-    profile = db.query(VoterProfile).filter(VoterProfile.voter_id_number == voter_id_number).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Voter ID not found")
-    user = profile.user
-    otp = generate_otp()
-    otp_hash = hash_password(otp)
-    expires = datetime.now(timezone.utc) + timedelta(minutes=15)
-    token = PasswordResetToken(user_id=user.id, otp_hash=otp_hash, expires_at=expires)
-    db.add(token)
-    db.commit()
-    from app.services.email_service import send_password_reset_otp
-    background_tasks.add_task(send_password_reset_otp, user.email, user.full_name, otp)
-
-
-def verify_voter_id_otp(
-    voter_id_number: str, otp: str, response: Response, db: Session
-) -> AuthResponse:
-    profile = db.query(VoterProfile).filter(VoterProfile.voter_id_number == voter_id_number).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Voter ID not found")
-    user = profile.user
-    now = datetime.now(timezone.utc)
-    tokens = (
-        db.query(PasswordResetToken)
-        .filter(
-            PasswordResetToken.user_id == user.id,
-            PasswordResetToken.used == False,
-            PasswordResetToken.expires_at > now,
-        )
-        .order_by(PasswordResetToken.expires_at.desc())
-        .all()
-    )
-    for t in tokens:
-        if verify_password(otp, t.otp_hash):
-            t.used = True
-            db.commit()
-            _set_refresh_cookie(response, user)
-            return _make_auth_response(user, db)
-    raise HTTPException(status_code=400, detail="Invalid or expired OTP")
-
-
-def register_candidate(req, db: Session, background_tasks) -> dict:
-    if db.query(User).filter(User.email == req.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    import secrets as sec
-    temp_password = sec.token_urlsafe(12)
-    user = User(
-        email=req.email,
-        password_hash=hash_password(temp_password),
-        full_name=req.full_name,
-        phone=req.phone,
-        role=Role.CANDIDATE,
-    )
-    db.add(user)
-    db.flush()
-
-    from app.models.candidate import Candidate
-    from app.models.enums import NominationStatus
-    candidate = Candidate(
-        user_id=user.id,
-        election_id=req.election_id,
-        constituency_id=req.constituency_id,
-        party_name=req.party_name,
-        manifesto=req.manifesto,
-        education=req.education,
-        criminal_record=req.criminal_record,
-        nomination_status=NominationStatus.SUBMITTED,
-    )
-    db.add(candidate)
-    db.commit()
-    db.refresh(user)
-    return {"message": "Candidate registered. Credentials will be sent on nomination approval."}
-
-
-def get_me(user_id: int, db: Session) -> UserResponse:
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    resp = UserResponse.model_validate(user)
-    if user.constituency:
-        resp.constituency_name = user.constituency.name
-    return resp

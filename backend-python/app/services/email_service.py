@@ -36,6 +36,11 @@ def send_password_reset_otp(to: str, full_name: str, otp: str) -> None:
     _send_email(to, "Password Reset OTP", html)
 
 
+def send_account_setup_otp(to: str, full_name: str, otp: str) -> None:
+    html = _render("account_setup_otp.html", full_name=full_name, otp=otp)
+    _send_email(to, "Verify your email to set up your voter account", html)
+
+
 def send_voter_id_approved(to: str, full_name: str, voter_id: str) -> None:
     html = _render("voter_id_approved.html", full_name=full_name, voter_id=voter_id)
     _send_email(to, "Your Voter ID Has Been Approved", html)

@@ -29,6 +29,8 @@ def get_voter_profile(
             gender=profile.gender,
             address=profile.address,
             photo_url=profile.photo_url,
+            full_name=current_user.full_name,
+            date_of_birth=profile.date_of_birth,
         )
     )
 
