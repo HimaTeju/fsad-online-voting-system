@@ -60,7 +60,7 @@ export default function FieldOfficerDashboard() {
           letterSpacing: '0.1em', textTransform: 'uppercase',
           color: 'var(--muted)', marginBottom: '0.5rem',
         }}>Booth Level Officer</p>
-        <h1 className="h1">Welcome, {user?.fullName?.split(' ')[0]}.</h1>
+        <h1 className="h1">Welcome, {user?.fullName}.</h1>
         {user?.constituencyName && (
           <p style={{ fontFamily: "'Inter', system-ui, sans-serif", color: 'var(--muted)', marginTop: '0.4rem' }}>
             Assigned constituency: <strong>{user.constituencyName}</strong>

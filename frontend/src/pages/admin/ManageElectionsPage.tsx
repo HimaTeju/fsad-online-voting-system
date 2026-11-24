@@ -12,7 +12,6 @@ const NEXT_STATUS: Record<string, string> = {
   NOMINATION_OPEN: 'NOMINATION_CLOSED',
   NOMINATION_CLOSED: 'VOTING_OPEN',
   VOTING_OPEN: 'VOTING_CLOSED',
-  VOTING_CLOSED: 'RESULTS_DECLARED',
 };
 
 const NEXT_LABEL: Record<string, string> = {
@@ -20,7 +19,6 @@ const NEXT_LABEL: Record<string, string> = {
   NOMINATION_OPEN: 'Close nominations',
   NOMINATION_CLOSED: 'Open voting',
   VOTING_OPEN: 'Close voting',
-  VOTING_CLOSED: 'Declare results',
 };
 
 export default function ManageElectionsPage() {
@@ -110,8 +108,13 @@ export default function ManageElectionsPage() {
                   </button>
                 )}
                 {e.status === 'VOTING_CLOSED' && (
+                  <Link to={`/admin/results/${e.id}`} className="btn btn-secondary btn-sm">
+                    Enter results &amp; declare →
+                  </Link>
+                )}
+                {e.status === 'RESULTS_DECLARED' && (
                   <Link to={`/admin/results/${e.id}`} className="btn btn-ghost btn-sm">
-                    Enter booth results
+                    View results
                   </Link>
                 )}
               </div>

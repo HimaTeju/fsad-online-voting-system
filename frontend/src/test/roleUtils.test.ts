@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canAccess, ROLE_HOME } from '../utils/roleUtils';
-import type { Role } from '../../types/auth.types';
+import type { Role } from '../types/auth.types';
 
 describe('roleUtils', () => {
   describe('ROLE_HOME', () => {

@@ -15,6 +15,8 @@ interface VoterProfile {
   gender: string;
   address: string;
   photoUrl?: string;
+  fullName?: string;
+  dateOfBirth?: string;
 }
 
 type PincodeState =
@@ -54,18 +56,18 @@ export default function VoterIdApplicationPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // A voter who claimed an existing Voter ID has a profile but no application,
+      // so load the profile on its own (404 just means "no Voter ID yet").
+      try {
+        const profileRes = await axiosClient.get('/voter/profile');
+        setVoterProfile(profileRes.data.data);
+      } catch {}
       try {
         const r = await applicationApi.getMine();
         const apps = r.data.data;
         if (apps && apps.length > 0) {
-          const app = apps[0];
-          setExisting(app);
-          if (app.status === 'APPROVED') {
-            try {
-              const profileRes = await axiosClient.get('/voter/profile');
-              setVoterProfile(profileRes.data.data);
-            } catch {}
-          }
+          // Show the latest application.
+          setExisting(apps[apps.length - 1]);
         }
       } catch {}
       setLoadingExisting(false);
@@ -118,6 +120,25 @@ export default function VoterIdApplicationPage() {
   };
 
   if (loadingExisting) return <LoadingSpinner />;
+
+  if (voterProfile && existing?.status !== 'APPROVED') {
+    return (
+      <div className="page-wrap-sm page-content">
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 className="h1" style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>Voter ID</h1>
+        </div>
+        <VoterIdCard
+          fullName={voterProfile.fullName ?? ''}
+          voterIdNumber={voterProfile.voterIdNumber}
+          constituencyName={voterProfile.constituencyName}
+          gender={voterProfile.gender}
+          dateOfBirth={voterProfile.dateOfBirth}
+          address={voterProfile.address}
+          photoUrl={voterProfile.photoUrl}
+        />
+      </div>
+    );
+  }
 
   if (existing) {
     const isApproved = existing.status === 'APPROVED';

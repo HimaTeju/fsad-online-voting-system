@@ -173,7 +173,11 @@ function ExistingVoterClaimForm({ onBack }: { onBack: () => void }) {
       toast.success(`Welcome, ${res.data.data.fullName}!`);
       navigate('/voter');
     } catch (err: any) {
+      // The OTP is only checked here, on the last step. Send the user back to the
+      // OTP step so the error shows next to the code they need to fix.
       setFieldErrors({ otp: err.response?.data?.message || 'Invalid or expired OTP' });
+      setOtp('');
+      setStep('email-otp');
     } finally {
       setLoading(false);
     }

@@ -14,23 +14,34 @@ export default function ManualResultsEntryPage() {
   const [votes, setVotes] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [finalized, setFinalized] = useState(false);
 
   useEffect(() => {
     Promise.all([
       electionApi.getCandidates(id),
       resultApi.getResults(id).catch(() => null),
-    ]).then(([candRes]) => {
+    ]).then(([candRes, resultRes]) => {
       setCandidates(candRes.data.data);
+      const result = resultRes?.data?.data;
+      if (result) {
+        setFinalized(!!result.finalized);
+        const saved: Record<number, number> = {};
+        for (const r of result.results ?? []) {
+          if (r.manualBoothVotes) saved[r.candidateId] = r.manualBoothVotes;
+        }
+        setVotes(saved);
+      }
     }).finally(() => setLoading(false));
   }, [id]);
+
+  const boothResults = () => Object.entries(votes).map(([candidateId, manualBoothVotes]) => ({
+    candidateId: Number(candidateId), manualBoothVotes,
+  }));
 
   const save = async () => {
     setSaving(true);
     try {
-      const results = Object.entries(votes).map(([candidateId, manualBoothVotes]) => ({
-        candidateId: Number(candidateId), manualBoothVotes,
-      }));
-      await adminApi.enterManualResults(id, { results });
+      await adminApi.enterManualResults(id, { results: boothResults() });
       toast.success('Booth results saved');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Save failed');
@@ -42,7 +53,11 @@ export default function ManualResultsEntryPage() {
   const finalize = async () => {
     if (!confirm('Finalise and publish results? This cannot be undone.')) return;
     try {
+      // Save whatever is in the form first so unsaved booth counts aren't lost.
+      const results = boothResults();
+      if (results.length) await adminApi.enterManualResults(id, { results });
       await adminApi.finalizeResults(id);
+      setFinalized(true);
       toast.success('Results finalised and published');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Finalization failed');
@@ -122,11 +137,17 @@ export default function ManualResultsEntryPage() {
               value={votes[c.id] ?? ''}
               onChange={(e) => setVotes({ ...votes, [c.id]: Number(e.target.value) })}
               className="input"
+              disabled={finalized}
               style={{ textAlign: 'right', fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 600 }}
             />
           </div>
         ))}
 
+        {finalized ? (
+          <p style={{ paddingTop: '1.25rem', fontFamily: "'Inter', system-ui, sans-serif", color: 'var(--muted)' }}>
+            Results are finalised and published. Booth counts can no longer be changed.
+          </p>
+        ) : (
         <div style={{ display: 'flex', gap: '0.75rem', paddingTop: '1.25rem' }}>
           <button onClick={save} disabled={saving} className="btn btn-secondary" style={{ flex: 1, padding: '0.75rem' }}>
             {saving ? 'Saving…' : 'Save booth results'}
@@ -135,6 +156,7 @@ export default function ManualResultsEntryPage() {
             Finalise &amp; publish
           </button>
         </div>
+        )}
       </div>
     </div>
   );

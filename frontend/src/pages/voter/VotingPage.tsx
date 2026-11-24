@@ -25,7 +25,7 @@ export default function VotingPage() {
     ]).then(([elRes, candRes, statusRes]) => {
       setElection(elRes.data.data);
       setCandidates(candRes.data.data);
-      setHasVoted(statusRes.data.data.hasVoted);
+      setHasVoted(!!statusRes.data.data.voted);
     });
   }, [id]);
 
