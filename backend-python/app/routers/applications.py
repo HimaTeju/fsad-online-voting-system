@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
-from app.dependencies import get_db, get_current_user
+from app.dependencies import get_db, get_current_user, require_roles
+from app.models.enums import Role
 from app.models.user import User
 from app.schemas.voter import VoterIdApplicationRequest
 from app.schemas.common import ApiResponse
@@ -8,13 +9,15 @@ import app.services.voter_id_application_service as svc
 
 router = APIRouter()
 
+_voter_only = require_roles(Role.VOTER)
+
 
 @router.post("")
 def submit_application(
     req: VoterIdApplicationRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
     result = svc.submit_application(req, current_user.id, db)
     return ApiResponse.ok(result, "Application submitted successfully")
@@ -33,7 +36,7 @@ def get_status(
 @router.get("/mine")
 def my_applications(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
     result = svc.get_my_applications(current_user.id, db)
     return ApiResponse.ok(result)

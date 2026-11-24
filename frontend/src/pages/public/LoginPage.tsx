@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import type { LoginRequest } from '../../types/auth.types';
 
 type TabId = 'voter' | 'candidate' | 'staff';
 
@@ -20,7 +21,13 @@ const emailSchema = z.object({
 });
 type EmailFormData = z.infer<typeof emailSchema>;
 
-function EmailLoginForm({ roleLabel }: { roleLabel: string }) {
+const PORTAL: Record<TabId, NonNullable<LoginRequest['portal']>> = {
+  voter: 'VOTER',
+  candidate: 'CANDIDATE',
+  staff: 'STAFF',
+};
+
+function EmailLoginForm({ roleLabel, tab }: { roleLabel: string; tab: TabId }) {
   const { login } = useAuth();
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<EmailFormData>({
     resolver: zodResolver(emailSchema),
@@ -28,9 +35,12 @@ function EmailLoginForm({ roleLabel }: { roleLabel: string }) {
 
   const onSubmit = async (data: EmailFormData) => {
     try {
-      await login(data);
-    } catch {
-      toast.error('Invalid email or password');
+      await login({ ...data, portal: PORTAL[tab] });
+    } catch (err: any) {
+      // 403 means right password, wrong tab: the message names the right tab.
+      toast.error(err.response?.status === 403
+        ? err.response.data?.message ?? 'Use the login tab for your account type'
+        : 'Invalid email or password');
     }
   };
 
@@ -183,7 +193,7 @@ export default function LoginPage() {
         <EmailLoginForm roleLabel={
           activeTab === 'voter' ? 'Voter' :
           activeTab === 'candidate' ? 'Candidate' : 'Staff'
-        } />
+        } tab={activeTab} />
       </div>
 
       <style>{`

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.dependencies import get_db, get_current_user
+from app.dependencies import get_db, require_roles
 from app.models.user import User
 from app.models.voter_profile import VoterProfile
-from app.models.enums import ElectionStatus
+from app.models.enums import ElectionStatus, Role
 from app.schemas.voter import VoterProfileResponse
 from app.schemas.common import ApiResponse
 from fastapi import HTTPException
@@ -11,11 +11,13 @@ import app.services.voting_service as voting_svc
 
 router = APIRouter()
 
+_voter_only = require_roles(Role.VOTER)
+
 
 @router.get("/profile", response_model=ApiResponse[VoterProfileResponse])
 def get_voter_profile(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
     profile = db.query(VoterProfile).filter(VoterProfile.user_id == current_user.id).first()
     if not profile:
@@ -38,7 +40,7 @@ def get_voter_profile(
 @router.get("/elections")
 def voter_elections(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
     from app.models.election import Election
     profile = db.query(VoterProfile).filter(VoterProfile.user_id == current_user.id).first()
@@ -57,7 +59,7 @@ def voter_elections(
 def vote_status(
     election_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_voter_only),
 ):
     voted = voting_svc.has_voted(current_user.id, election_id, db)
     return ApiResponse.ok({"voted": voted})

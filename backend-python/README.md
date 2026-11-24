@@ -26,6 +26,14 @@ cp .env.example .env
 alembic upgrade head
 ```
 
+### Account types
+
+Voter, candidate and staff accounts are separate, and each signs in only on its own
+login tab. A person who wants to vote and also stand for election registers twice,
+with two different email addresses: a voter account (which votes) and a candidate
+account (which files nominations). Voter accounts can't file nominations, and
+candidate accounts can't vote or apply for a Voter ID.
+
 ### Staff accounts
 
 There is no sign-up for staff. Create the Election Officer and Booth Level Officer accounts with:

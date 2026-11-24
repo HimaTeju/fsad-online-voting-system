@@ -85,17 +85,17 @@ export default function App() {
 
               {/* Voter */}
               <Route path="/voter" element={
-                <ProtectedRoute allowedRoles={['VOTER', 'CANDIDATE']}>
+                <ProtectedRoute allowedRoles={['VOTER']}>
                   <VoterDashboard />
                 </ProtectedRoute>
               } />
               <Route path="/voter/apply" element={
-                <ProtectedRoute allowedRoles={['VOTER', 'CANDIDATE']}>
+                <ProtectedRoute allowedRoles={['VOTER']}>
                   <VoterIdApplicationPage />
                 </ProtectedRoute>
               } />
               <Route path="/voter/elections" element={
-                <ProtectedRoute allowedRoles={['VOTER', 'CANDIDATE']}>
+                <ProtectedRoute allowedRoles={['VOTER']}>
                   <ElectionListPage />
                 </ProtectedRoute>
               } />
@@ -112,7 +112,7 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="/candidate/nominate" element={
-                <ProtectedRoute allowedRoles={['CANDIDATE', 'VOTER']}>
+                <ProtectedRoute allowedRoles={['CANDIDATE']}>
                   <NominationPage />
                 </ProtectedRoute>
               } />

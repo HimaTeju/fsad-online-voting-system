@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import EmailStr, Field
 from app.models.enums import Role
 from app.schemas.common import CamelModel, CamelResponse
@@ -14,6 +14,9 @@ class RegisterRequest(CamelModel):
 class LoginRequest(CamelModel):
     email: EmailStr
     password: str
+    # Which login tab was used. Voter, candidate and staff accounts are separate,
+    # so an account can only sign in through its own tab.
+    portal: Optional[Literal["VOTER", "CANDIDATE", "STAFF"]] = None
 
 
 class ForgotPasswordRequest(CamelModel):

@@ -17,6 +17,21 @@ from app.config import settings
 
 
 REFRESH_COOKIE = "refreshToken"
+
+# Voter, candidate and staff accounts are separate: each signs in on its own tab.
+_PORTAL_ROLES = {
+    "VOTER": {Role.VOTER},
+    "CANDIDATE": {Role.CANDIDATE},
+    "STAFF": {Role.ADMIN, Role.FIELD_OFFICER},
+}
+_ROLE_LABELS = {
+    Role.VOTER: "voter", Role.CANDIDATE: "candidate",
+    Role.ADMIN: "staff", Role.FIELD_OFFICER: "staff",
+}
+_ROLE_TABS = {
+    Role.VOTER: "Voter", Role.CANDIDATE: "Candidate",
+    Role.ADMIN: "Election Staff", Role.FIELD_OFFICER: "Election Staff",
+}
 PLACEHOLDER_SUFFIX = "@placeholder.invalid"
 
 # In-process store: voter_profile.user_id → email being claimed.
@@ -69,6 +84,11 @@ def login(req: LoginRequest, response: Response, db: Session) -> AuthResponse:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Account is deactivated")
+    if req.portal and user.role not in _PORTAL_ROLES[req.portal]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"This is a {_ROLE_LABELS[user.role]} account. Sign in on the {_ROLE_TABS[user.role]} tab.",
+        )
     _set_refresh_cookie(response, user)
     return _make_auth_response(user, db)
 
@@ -176,7 +196,11 @@ def register_candidate(req, db: Session, background_tasks) -> dict:
     from app.services.candidate_service import check_nomination_target
     check_nomination_target(req.election_id, req.constituency_id, db)
     if db.query(User).filter(User.email == req.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(
+            status_code=400,
+            detail="This email already has an account. Candidate accounts are separate "
+                   "from voter accounts, so use a different email address.",
+        )
     import secrets as sec
     temp_password = sec.token_urlsafe(12)
     user = User(

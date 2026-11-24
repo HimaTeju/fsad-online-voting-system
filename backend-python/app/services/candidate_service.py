@@ -4,8 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.candidate import Candidate
 from app.models.election import Election
-from app.models.user import User
-from app.models.enums import ElectionStatus, NominationStatus, Role
+from app.models.enums import ElectionStatus, NominationStatus
 from app.schemas.candidate import (
     CandidateNominationRequest,
     NominationReviewRequest,
@@ -55,9 +54,6 @@ def nominate(req: CandidateNominationRequest, user_id: int, db: Session) -> Cand
         Candidate.user_id == user_id, Candidate.election_id == req.election_id
     ).first():
         raise HTTPException(409, "Already nominated for this election")
-
-    user = db.query(User).filter(User.id == user_id).first()
-    user.role = Role.CANDIDATE
 
     candidate = Candidate(
         user_id=user_id,
